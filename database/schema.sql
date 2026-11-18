@@ -41,6 +41,7 @@ CREATE TABLE IF NOT EXISTS users (
 --   raw_material_need-> factories looking for raw material
 --   surplus_food     -> hotels / colleges offering safe surplus meals
 --   food_request     -> orphanages / NGOs asking for food
+--   help_request     -> orphanages / NGOs asking for delivery persons or volunteers
 --   transport_offer  -> 'other' members offering a vehicle (with free-from / free-until)
 CREATE TABLE IF NOT EXISTS listings (
   id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -51,7 +52,8 @@ CREATE TABLE IF NOT EXISTS listings (
                 'raw_material_need',
                 'surplus_food',
                 'food_request',
-                'transport_offer'
+                'transport_offer',
+                'help_request'
               ) NOT NULL,
   title       VARCHAR(150) NOT NULL,
   quantity    DECIMAL(10,2) NULL,
@@ -60,11 +62,18 @@ CREATE TABLE IF NOT EXISTS listings (
   description TEXT NULL,
   image_url   VARCHAR(255) NULL,   -- optional picture (crop, food, etc.)
   vehicle         VARCHAR(60) NULL,   -- transport offers only
-  available_from  DATETIME    NULL,   -- transport offers only
-  available_until DATETIME    NULL,   -- transport offers only
+  help_kind       VARCHAR(20) NULL,   -- help requests only: delivery_person / volunteer / both
+  available_from  DATETIME    NULL,   -- transport offers / help requests
+  available_until DATETIME    NULL,   -- transport offers / help requests
   status      ENUM('open','closed') NOT NULL DEFAULT 'open',
   created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT fk_listings_user FOREIGN KEY (user_id)
     REFERENCES users(id) ON DELETE CASCADE,
   INDEX idx_listings_type_status (type, status)
 ) ENGINE=InnoDB;
+
+ALTER TABLE listings
+  MODIFY type ENUM('produce','ingredient_need','raw_material_need',
+                   'surplus_food','food_request','transport_offer',
+                   'help_request') NOT NULL,
+  ADD COLUMN help_kind VARCHAR(20) NULL AFTER vehicle;

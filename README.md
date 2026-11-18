@@ -12,9 +12,9 @@ surplus food with orphanages and NGOs.
 | Farmer | `farmer` | `/farmer.html` | produce | ingredient + raw-material needs |
 | Hotel Manager | `hotel_manager` | `/hotel.html` | ingredient needs, surplus food | produce, food requests |
 | Food Processing Manager | `processing_manager` | `/processing.html` | raw-material needs | produce |
-| Orphanage Incharge | `orphanage_incharge` | `/orphanage.html` | food requests | surplus food |
+| Orphanage Incharge | `orphanage_incharge` | `/orphanage.html` | food requests, **delivery / volunteer requests** | surplus food, transport offers |
 | College Food Incharge | `college_incharge` | `/college.html` | ingredient needs, surplus food | produce, food requests |
-| NGO Incharge | `ngo_incharge` | `/ngo.html` | food requests | surplus food, food requests |
+| NGO Incharge | `ngo_incharge` | `/ngo.html` | food requests, **delivery / volunteer requests** | surplus food, food requests, transport offers |
 | Others (volunteers, donors, transporters, shops…) | `other` | `/other.html` | surplus food, food requests, **transport offers** (when free + how much they can carry) | everything except transport offers |
 
 After register/login the user is redirected to their own page. The backend
@@ -56,6 +56,7 @@ Upgrading an existing database? Run once:
 `mysql -u root -p social_update < database/migration_add_pictures.sql`
 (this also adds the new `other` role)
 Then, for transport offers: `mysql -u root -p social_update < database/migration_add_transport.sql`
+For delivery / volunteer requests: `mysql -u root -p social_update < database/migration_add_help_requests.sql`
 
 ## Project layout
 
@@ -88,12 +89,13 @@ social_update/
 | GET | `/api/listings?q=&types=&district=` | browse others' listings |
 | GET | `/api/my-listings` | own listings |
 | POST | `/api/listings` | create listing, optional picture (multipart or JSON) |
+| POST | `/api/listings/<id>/status` | mark own post completed (`{"status":"closed"}`) or reopen it (`"open"`) |
 | DELETE | `/api/listings/<id>` | delete own listing |
 | GET | `/api/members?q=&role=&district=` | public directory (contacts hidden when logged out) |
 
 ## Where to add your logic later
 
 - Order/interest requests between members (new table + routes)
-- Listing status (`open` → `closed`) and expiry for surplus food
+- Expiry for surplus food
 - Notifications, email/SMS verification, password reset
 - Rate limiting and CSRF protection before going live

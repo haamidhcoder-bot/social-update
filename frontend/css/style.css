@@ -231,3 +231,9 @@ footer .wrap{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
 .map-canvas{height:320px;border:1px solid var(--line);border-radius:4px;background:var(--line-soft);z-index:0}
 .map-status{display:block;margin-top:6px;color:var(--muted)}
 .map-status a{color:var(--green);font-weight:600}
+
+/* completed posts */
+.my-actions{display:flex;flex-direction:column;gap:6px;align-items:stretch}
+.my-item.done{background:#f1f5ee;border-color:#c5d6bd}
+.my-item.done .my-main b{color:#5b6b55}
+.done-badge{display:inline-block;margin-left:6px;padding:1px 8px;border-radius:3px;background:var(--green);color:#fff;font-size:12px;font-weight:600;vertical-align:middle}

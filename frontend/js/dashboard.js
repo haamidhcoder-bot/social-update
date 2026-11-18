@@ -54,6 +54,15 @@
             <input id="luntil" type="datetime-local">
             <span class="hint">Hotels, farmers and NGOs will see this window. Offers disappear automatically when it ends.</span>
           </div>
+          <div class="field full" id="helpFields" style="display:none">
+            <label for="lhelp">Who do you need?</label>
+            <select id="lhelp">${Object.entries(HELP_KIND_LABELS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select>
+            <label for="hfrom" style="margin-top:8px">Needed from *</label>
+            <input id="hfrom" type="datetime-local">
+            <label for="huntil" style="margin-top:8px">Needed until *</label>
+            <input id="huntil" type="datetime-local">
+            <span class="hint">Volunteers and transporters will see this. The request disappears automatically when the time ends. Put pickup / drop places in Details.</span>
+          </div>
           <div class="field full" id="listingPicture"></div>
           <div class="field full"><label for="ldesc">Details</label><textarea id="ldesc" rows="3" placeholder="Pickup time, quality, delivery options…"></textarea></div>
           <p class="form-error" id="listingError" style="grid-column:1/-1"></p>
@@ -87,6 +96,7 @@
     raw_material_need: 'Picture (optional) - e.g. the grade or sample you need',
     food_request: 'Picture (optional) - e.g. your kitchen or the people you serve',
     transport_offer: 'Photo of your vehicle (optional)',
+    help_request: 'Picture (optional) - e.g. the place where help is needed',
   };
   const listingPic = mountPicture(document.getElementById('listingPicture'), PIC_LABELS[permissions.post[0]]);
 
@@ -101,13 +111,19 @@
       const { listings: raw } = await API.get('/api/my-listings');
       const listings = raw.map(parseListing);
       box.innerHTML = listings.length ? listings.map(l => `
-        <div class="my-item">
+        <div class="my-item${l.status === 'closed' ? ' done' : ''}">
           ${pictureTag(l.image_url, 'my-thumb', l.title)}
-          <div class="my-main"><b>${esc(l.title)}</b>
+          <div class="my-main"><b>${esc(l.title)}${l.status === 'closed' ? ' <span class="done-badge">✓ Completed</span>' : ''}</b>
           <small>${LISTING_TYPES[l.type].label}${fmtQty(l) ? ' · ' + esc(fmtQty(l)) : ''}${fmtPrice(l) ? ' · ' + fmtPrice(l) : ''}</small>
           ${l.type === 'surplus_food' ? safeBlock(l.ft, l.ct) : ''}
-          ${l.type === 'transport_offer' ? transportBlock(l) : ''}</div>
-          <button class="btn small danger" data-del="${l.id}">Delete</button>
+          ${l.type === 'transport_offer' ? transportBlock(l) : ''}
+          ${l.type === 'help_request' ? helpBlock(l) : ''}</div>
+          <div class="my-actions">
+            ${l.status === 'closed'
+              ? `<button class="btn small light" data-reopen="${l.id}">Reopen</button>`
+              : `<button class="btn small" data-done="${l.id}">Mark as completed</button>`}
+            <button class="btn small danger" data-del="${l.id}">Delete</button>
+          </div>
         </div>`).join('') : '<div class="empty">Nothing posted yet.</div>';
     } catch (e) { box.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
   }
@@ -133,6 +149,7 @@
             ${l.description ? '<br>' + esc(l.description) : ''}</div>
           ${l.type === 'surplus_food' ? safeBlock(l.ft, l.ct) : ''}
           ${l.type === 'transport_offer' ? transportBlock(l) : ''}
+          ${l.type === 'help_request' ? helpBlock(l) : ''}
           <div class="contact"><b>${esc(l.org_name)}</b> · ${esc(l.contact_name)}<br><a href="mailto:${esc(l.email)}">${esc(l.email)}</a>
             <div class="chips">${phoneChip(l.phone)}${placeChip(l.org_name + ', ' + l.area, [l.org_name, l.area, l.district, 'Tamil Nadu'].join(', '))}</div></div>
         </article>`;
@@ -159,6 +176,12 @@
         if (new Date(u) <= new Date(f)) { err.textContent = '"Free until" must be after "free from".'; return; }
         if (new Date(u) <= new Date()) { err.textContent = '"Free until" is already in the past.'; return; }
       }
+      if (type === 'help_request') {
+        const f = document.getElementById('hfrom').value, u = document.getElementById('huntil').value;
+        if (!f || !u) { err.textContent = 'Please tell us when you need help (from and until).'; return; }
+        if (new Date(u) <= new Date(f)) { err.textContent = '"Needed until" must be after "needed from".'; return; }
+        if (new Date(u) <= new Date()) { err.textContent = '"Needed until" is already in the past.'; return; }
+      }
       const fd = new FormData();
       fd.append('type', type);
       fd.append('title', document.getElementById('ltitle').value);
@@ -170,6 +193,11 @@
         fd.append('vehicle', document.getElementById('lvehicle').value);
         fd.append('available_from', document.getElementById('lfrom').value);
         fd.append('available_until', document.getElementById('luntil').value);
+      }
+      if (type === 'help_request') {
+        fd.append('help_kind', document.getElementById('lhelp').value);
+        fd.append('available_from', document.getElementById('hfrom').value);
+        fd.append('available_until', document.getElementById('huntil').value);
       }
       await withBusy(e.target, 'Posting…', async () => {
         await listingPic.appendTo(fd);
@@ -183,10 +211,16 @@
   });
 
   document.getElementById('myListings').addEventListener('click', async e => {
-    const id = e.target.dataset.del;
-    if (!id || !confirm('Delete this post?')) return;
-    try { await API.del('/api/listings/' + id); loadMine(); toast('Deleted.'); }
-    catch (ex) { toast(ex.message); }
+    const { del, done, reopen } = e.target.dataset;
+    try {
+      if (done || reopen) {
+        if (done && !confirm('Mark this post as completed? Other members will no longer see it.')) return;
+        await API.post('/api/listings/' + (done || reopen) + '/status', { status: done ? 'closed' : 'open' });
+        loadMine(); toast(done ? 'Marked as completed.' : 'Post reopened.');
+      } else if (del && confirm('Delete this post?')) {
+        await API.del('/api/listings/' + del); loadMine(); toast('Deleted.');
+      }
+    } catch (ex) { toast(ex.message); }
   });
 
   let t;
@@ -206,17 +240,24 @@
   }
   // transport offers: when free + how much can be carried
   function syncTransport() {
-    const on = document.getElementById('ltype').value === 'transport_offer';
+    const type = document.getElementById('ltype').value;
+    const on = type === 'transport_offer', help = type === 'help_request';
     document.getElementById('transportFields').style.display = on ? 'grid' : 'none';
-    document.getElementById('lqtyLabel').textContent = on ? 'How much can you carry? *' : 'Quantity';
+    document.getElementById('helpFields').style.display = help ? 'grid' : 'none';
+    document.getElementById('lqtyLabel').textContent = on ? 'How much can you carry? *' : help ? 'How many people do you need? *' : 'Quantity';
     document.getElementById('lunitLabel').textContent = on ? 'Unit *' : 'Unit';
     document.getElementById('lpriceLabel').textContent = on ? 'Charge (₹, optional)' : 'Price (₹, optional)';
-    document.getElementById('lqty').required = on;
+    document.getElementById('lqty').required = on || help;
     document.getElementById('lunit').required = on;
+    document.getElementById('lunit').closest('.field').style.display = help ? 'none' : '';
+    document.getElementById('lprice').closest('.field').style.display = help ? 'none' : '';
     document.getElementById('unitList').innerHTML = on ? TRANSPORT_UNITS.map(u => `<option value="${u}">`).join('') : '';
     const f = document.getElementById('lfrom'), u = document.getElementById('luntil');
     f.min = u.min = nowLocalInput();
     if (on && !f.value) f.value = nowLocalInput();
+    const hf = document.getElementById('hfrom'), hu = document.getElementById('huntil');
+    hf.min = hu.min = nowLocalInput();
+    if (help && !hf.value) hf.value = nowLocalInput();
   }
   document.getElementById('ltype').addEventListener('change', syncFood);
   syncFood();

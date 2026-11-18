@@ -152,51 +152,86 @@ def connect():
 
 
 def main():
-    db = connect()
-    cur = db.cursor()
+    db = None
+    cur = None
+    try:
+        db = connect()
+        cur = db.cursor()
 
-    if "--reset" in sys.argv:
-        cur.execute("DELETE FROM listings")
-        cur.execute("DELETE FROM users")
-        cur.execute("ALTER TABLE listings AUTO_INCREMENT = 1")
-        cur.execute("ALTER TABLE users AUTO_INCREMENT = 1")
-        print("Cleared existing users and listings.")
+        if "--reset" in sys.argv:
+            confirm = input(
+                "This will DELETE ALL rows from users and listings. "
+                "Type RESET to continue: "
+            )
+            if confirm != "RESET":
+                print("Reset cancelled. No data was changed.")
+                return
 
-    pw_hash = generate_password_hash(PASSWORD)   # same hash is fine for every sample account
-    ids, added_users = {}, 0
-    for (role, org, contact, phone, email, district, area, address,
-         details, capacity, website) in USERS:
-        cur.execute("SELECT id FROM users WHERE email = %s", (email,))
-        row = cur.fetchone()
-        if row:
-            ids[email] = row[0]
-            continue
-        cur.execute(
-            "INSERT INTO users (role, org_name, contact_name, phone, email, "
-            "password_hash, district, area, address, details, capacity, website) "
-            "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
-            (role, org, contact, phone, email, pw_hash, district, area,
-             address, details, capacity, website))
-        ids[email] = cur.lastrowid
-        added_users += 1
+            # Delete child rows before parent rows because of the foreign key.
+            cur.execute("DELETE FROM listings")
+            cur.execute("DELETE FROM users")
+            cur.execute("ALTER TABLE listings AUTO_INCREMENT = 1")
+            cur.execute("ALTER TABLE users AUTO_INCREMENT = 1")
+            print("Cleared existing users and listings.")
 
-    added_listings = 0
-    for (email, ltype, title, qty, unit, price, desc, vehicle, a_from, a_until) in LISTINGS:
-        uid = ids[email]
-        cur.execute("SELECT id FROM listings WHERE user_id = %s AND title = %s", (uid, title))
-        if cur.fetchone():
-            continue
-        cur.execute(
-            "INSERT INTO listings (user_id, type, title, quantity, unit, price, "
-            "description, vehicle, available_from, available_until) "
-            "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
-            (uid, ltype, title, qty, unit, price, desc, vehicle, a_from, a_until))
-        added_listings += 1
+        pw_hash = generate_password_hash(PASSWORD)
+        ids, added_users = {}, 0
 
-    db.commit()
-    db.close()
-    print(f"Added {added_users} members and {added_listings} posts.")
-    print(f"Log in with any sample email, e.g. selvam@example.com / {PASSWORD}")
+        for (role, org, contact, phone, email, district, area, address,
+             details, capacity, website) in USERS:
+            cur.execute("SELECT id FROM users WHERE email = %s", (email,))
+            row = cur.fetchone()
+            if row:
+                ids[email] = row[0]
+                continue
+
+            cur.execute(
+                "INSERT INTO users (role, org_name, contact_name, phone, email, "
+                "password_hash, district, area, address, details, capacity, website) "
+                "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+                (role, org, contact, phone, email, pw_hash, district, area,
+                 address, details, capacity, website)
+            )
+            ids[email] = cur.lastrowid
+            added_users += 1
+
+        added_listings = 0
+        for (email, ltype, title, qty, unit, price, desc, vehicle,
+             a_from, a_until) in LISTINGS:
+            uid = ids[email]
+            cur.execute(
+                "SELECT id FROM listings WHERE user_id = %s AND title = %s",
+                (uid, title)
+            )
+            if cur.fetchone():
+                continue
+
+            cur.execute(
+                "INSERT INTO listings (user_id, type, title, quantity, unit, price, "
+                "description, vehicle, available_from, available_until) "
+                "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+                (uid, ltype, title, qty, unit, price, desc, vehicle,
+                 a_from, a_until)
+            )
+            added_listings += 1
+
+        db.commit()
+        print(f"Added {added_users} members and {added_listings} posts.")
+        print(
+            f"Log in with any sample email, e.g. "
+            f"selvam@example.com / {PASSWORD}"
+        )
+
+    except Exception:
+        if db:
+            db.rollback()
+        raise
+
+    finally:
+        if cur:
+            cur.close()
+        if db:
+            db.close()
 
 
 if __name__ == "__main__":

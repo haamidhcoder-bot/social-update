@@ -87,12 +87,12 @@ PERMISSIONS = {
                                       "transport_offer"]},
     "processing_manager": {"post": ["raw_material_need"],
                            "browse": ["produce", "transport_offer"]},
-    "orphanage_incharge": {"post": ["food_request"],
+    "orphanage_incharge": {"post": ["food_request", "help_request"],
                            "browse": ["surplus_food", "transport_offer"]},
     "college_incharge":   {"post": ["ingredient_need", "surplus_food"],
                            "browse": ["produce", "food_request",
                                       "transport_offer"]},
-    "ngo_incharge":       {"post": ["food_request"],
+    "ngo_incharge":       {"post": ["food_request", "help_request"],
                            "browse": ["surplus_food", "food_request",
                                       "transport_offer"]},
     # volunteers, individual donors, transporters, shops, anyone else
@@ -100,9 +100,10 @@ PERMISSIONS = {
                                    "transport_offer"],
                            "browse": ["produce", "ingredient_need",
                                       "raw_material_need", "surplus_food",
-                                      "food_request"]},
+                                      "food_request", "help_request"]},
 }
 
+HELP_KINDS = ("delivery_person", "volunteer", "both")
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 PHONE_RE = re.compile(r"^[0-9+() \-]{8,16}$")
 
@@ -309,7 +310,6 @@ def clean_profile(d):
         "email": (text(d, "email", 150, True, "Email") or "").lower(),
         "district": text(d, "district", 60, True, "District"),
         "area": text(d, "area", 100, True, "Area"),
-        "address": text(d, "address", 255, label="Address"),
         "details": text(d, "details", 5000, label="Details"),
         "capacity": text(d, "capacity", 100, label="Capacity"),
         "website": text(d, "website", 255, label="Website"),
@@ -463,12 +463,12 @@ def register():
 
     user_id, _ = execute(
         "INSERT INTO users (role, org_name, contact_name, phone, email, "
-        "password_hash, district, area, address, latitude, longitude, details, "
+        "password_hash, district, area, latitude, longitude, details, "
         "capacity, website, photo_url) "
-        "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+        "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
         (role, f["org"], f["contact"], f["phone"],
          email, generate_password_hash(password),
-         f["district"], f["area"], f["address"], lat, lng,
+         f["district"], f["area"], lat, lng,
          f["details"], f["capacity"], f["website"], photo))
 
     session.clear()
@@ -525,14 +525,14 @@ def browse_listings():
     sql = (
         "SELECT l.id, l.type, l.title, l.quantity, l.unit, l.price, "
         "l.description, l.image_url, "
-        "l.vehicle, DATE_FORMAT(l.available_from, '%%Y-%%m-%%dT%%H:%%i') AS available_from, "
+        "l.vehicle, l.help_kind, DATE_FORMAT(l.available_from, '%%Y-%%m-%%dT%%H:%%i') AS available_from, "
         "DATE_FORMAT(l.available_until, '%%Y-%%m-%%dT%%H:%%i') AS available_until, "
         "l.created_at, u.org_name, u.contact_name, u.phone, "
         "u.email, u.district, u.area "
         "FROM listings l JOIN users u ON u.id = l.user_id "
         "WHERE l.status='open' AND l.user_id <> %s "
         f"AND l.type IN ({','.join(['%s'] * len(types))}) "
-        "AND (l.type <> 'transport_offer' OR l.available_until IS NULL "
+        "AND (l.type NOT IN ('transport_offer','help_request') OR l.available_until IS NULL "
         "     OR l.available_until > NOW()) "
         "AND (l.title LIKE %s OR l.description LIKE %s OR u.org_name LIKE %s) "
     )
@@ -548,7 +548,7 @@ def browse_listings():
 @login_required
 def my_listings():
     rows = query("SELECT id, type, title, quantity, unit, price, description, "
-                 "image_url, vehicle, "
+                 "image_url, vehicle, help_kind, "
                  "DATE_FORMAT(available_from, '%%Y-%%m-%%dT%%H:%%i') AS available_from, "
                  "DATE_FORMAT(available_until, '%%Y-%%m-%%dT%%H:%%i') AS available_until, "
                  "status, created_at FROM listings WHERE user_id=%s "
@@ -580,7 +580,26 @@ def create_listing():
             return None
         return x
 
-    vehicle = avail_from = avail_until = None
+    vehicle = avail_from = avail_until = help_kind = None
+    if ltype == "help_request":
+        # orphanages / NGOs asking for delivery persons or volunteers
+        help_kind = (d.get("help_kind") or "").strip()
+        if help_kind not in HELP_KINDS:
+            return err("Choose whether you need a delivery person or a volunteer.")
+        if not num("quantity") or num("quantity") <= 0:
+            return err("Tell us how many people you need.")
+        unit = "people"
+        try:
+            avail_from = datetime.strptime(
+                str(d.get("available_from") or ""), "%Y-%m-%dT%H:%M")
+            avail_until = datetime.strptime(
+                str(d.get("available_until") or ""), "%Y-%m-%dT%H:%M")
+        except ValueError:
+            return err("Tell us when you need help (from and until).")
+        if avail_until <= avail_from:
+            return err("'Needed until' must be after 'needed from'.")
+        if avail_until <= datetime.now():
+            return err("'Needed until' is already in the past.")
     if ltype == "transport_offer":
         # when the person is free and how much they can carry are required
         if not num("quantity") or num("quantity") <= 0:
@@ -607,12 +626,28 @@ def create_listing():
 
     new_id, _ = execute(
         "INSERT INTO listings (user_id, type, title, quantity, unit, price, "
-        "description, image_url, vehicle, available_from, available_until) "
-        "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+        "description, image_url, vehicle, help_kind, available_from, available_until) "
+        "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
         (g.user["id"], ltype, title, num("quantity"),
          unit, num("price"), description, image,
-         vehicle, avail_from, avail_until))
+         vehicle, help_kind, avail_from, avail_until))
     return jsonify(ok=True, id=new_id), 201
+
+
+@app.post("/api/listings/<int:listing_id>/status")
+@login_required
+def set_listing_status(listing_id):
+    """Owner marks a post as completed (hidden from everyone else) or reopens it."""
+    status = str(request_data().get("status", "")).strip()
+    if status not in ("open", "closed"):
+        return err("Status must be 'open' or 'closed'.")
+    row = query("SELECT id FROM listings WHERE id=%s AND user_id=%s",
+                (listing_id, g.user["id"]), one=True)
+    if not row:
+        return err("Listing not found.", 404)
+    execute("UPDATE listings SET status=%s WHERE id=%s AND user_id=%s",
+            (status, listing_id, g.user["id"]))
+    return jsonify(ok=True, status=status)
 
 
 @app.delete("/api/listings/<int:listing_id>")
@@ -632,7 +667,7 @@ def delete_listing(listing_id):
 # API: my account (view / edit details, picture and password)
 # --------------------------------------------------------------------------
 ACCOUNT_COLS = ("id, role, org_name, contact_name, phone, email, district, "
-                "area, address, latitude, longitude, details, capacity, website, photo_url")
+                "area, latitude, longitude, details, capacity, website, photo_url")
 
 
 @app.get("/api/account")
@@ -692,10 +727,10 @@ def update_account():
 
     execute(
         "UPDATE users SET org_name=%s, contact_name=%s, phone=%s, email=%s, "
-        "district=%s, area=%s, address=%s, latitude=%s, longitude=%s, "
+        "district=%s, area=%s, latitude=%s, longitude=%s, "
         "details=%s, capacity=%s, website=%s, photo_url=%s WHERE id=%s",
         (f["org"], f["contact"], f["phone"], email,
-         f["district"], f["area"], f["address"], lat, lng,
+         f["district"], f["area"], lat, lng,
          f["details"], f["capacity"], f["website"], photo, uid))
     if new_pw:
         execute("UPDATE users SET password_hash=%s WHERE id=%s",

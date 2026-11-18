@@ -29,7 +29,7 @@ function mountMapPicker(host, initial) {
   host.classList.add('map-picker');
   host.innerHTML = `
     <label>Exact location on map (optional)</label>
-    <span class="hint">Search for your place, or click the map to drop a pin on your landmark. Drag the pin to adjust.</span>
+    <span class="hint">Search for your place, or click the map to drop a pin on your location. Drag the pin to adjust.</span>
     <div class="map-tools">
       <input type="text" class="map-search" placeholder="Search a place, e.g. Peelamedu bus stop" autocomplete="off">
       <button type="button" class="btn light map-find">Search</button>

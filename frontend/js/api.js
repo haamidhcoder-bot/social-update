@@ -82,6 +82,7 @@ const LISTING_TYPES = {
   surplus_food:      { label: 'Surplus food',        cls: '' },
   food_request:      { label: 'Food request',        cls: 'orange' },
   transport_offer:   { label: 'Transport available', cls: '' },
+  help_request:      { label: 'Delivery / volunteer needed', cls: 'orange' },
 };
 
 // ---------- food safety window (surplus food) ----------
@@ -265,6 +266,14 @@ const VEHICLES = ['Bike / scooter', 'Auto', 'Car', 'Van', 'Mini truck / tempo', 
 const TRANSPORT_UNITS = ['kg', 'tonnes', 'meals', 'boxes', 'litres'];
 const localTime = s => { const t = new Date(s); return isNaN(t) ? null : t.getTime(); };
 // "Free: 18 Nov, 9:00 am → 18 Nov, 5:00 pm" + vehicle + "Free now" badge
+const HELP_KIND_LABELS = { delivery_person: 'Delivery person', volunteer: 'Volunteer', both: 'Delivery person or volunteer' };
+function helpBlock(l) {
+  const a = localTime(l.available_from), b = localTime(l.available_until);
+  if (a == null || b == null) return '';
+  return `<div class="transport live">
+    <div class="transport-line">${esc(HELP_KIND_LABELS[l.help_kind] || 'Help')} needed <span>· until ${clock12(b)}</span></div>
+    <div class="transport-meta">${clock12(a)} to ${clock12(b)}</div></div>`;
+}
 function transportBlock(l) {
   const a = localTime(l.available_from), b = localTime(l.available_until);
   if (a == null || b == null) return '';
