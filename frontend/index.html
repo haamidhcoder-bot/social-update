@@ -82,6 +82,7 @@
         <div class="field"><label for="district">District *</label><select id="district" name="district" required></select></div>
         <div class="field"><label for="area">Area / town *</label><input id="area" name="area" required placeholder="e.g. Peelamedu"></div>
         <div class="field full"><label for="address">Address or landmark</label><input id="address" name="address" placeholder="Street, town, landmark"></div>
+        <div class="field full" id="regMap"></div>
         <div class="field full"><label for="details">What do you offer or need?</label><textarea id="details" name="details" rows="3"></textarea></div>
         <div class="field full" id="regPicture"></div>
         <div class="field"><label for="capacity">Capacity / quantity (optional)</label><input id="capacity" name="capacity" placeholder="e.g. 200 meals a day"></div>
@@ -101,6 +102,7 @@
     <select id="filterDistrict"><option value="">All districts</option></select>
   </div>
   <div class="directory" id="directoryList"></div>
+  <div class="see-all"><button type="button" class="btn light" id="seeAllBtn" hidden></button></div>
 </section>
 </main>
 
@@ -122,6 +124,7 @@
 <div class="toast" id="toast"></div>
 
 <script src="js/api.js"></script>
+<script src="js/mappicker.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>

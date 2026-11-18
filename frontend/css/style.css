@@ -220,3 +220,14 @@ footer .wrap{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
 .transport.live .transport-line{color:#2c6a3d}
 .transport-meta{font-size:13.5px;color:var(--muted);margin-top:3px;line-height:1.55}
 .my-item .transport{margin:6px 0 0;padding:6px 10px}
+
+/* members: see all */
+.see-all{text-align:center;margin-top:18px}
+[hidden]{display:none!important}
+
+/* map pin picker */
+.map-picker .map-tools{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}
+.map-picker .map-search{flex:1;min-width:200px}
+.map-canvas{height:320px;border:1px solid var(--line);border-radius:4px;background:var(--line-soft);z-index:0}
+.map-status{display:block;margin-top:6px;color:var(--muted)}
+.map-status a{color:var(--green);font-weight:600}

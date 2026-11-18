@@ -24,6 +24,8 @@ CREATE TABLE IF NOT EXISTS users (
   district      VARCHAR(60)  NOT NULL,
   area          VARCHAR(100) NOT NULL,
   address       VARCHAR(255) NULL,
+  latitude      DECIMAL(9,6) NULL,   -- optional pin dropped on the map
+  longitude     DECIMAL(9,6) NULL,
   details       TEXT NULL,
   capacity      VARCHAR(100) NULL,
   website       VARCHAR(255) NULL,

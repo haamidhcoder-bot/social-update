@@ -171,8 +171,10 @@
         fd.append('available_from', document.getElementById('lfrom').value);
         fd.append('available_until', document.getElementById('luntil').value);
       }
-      listingPic.appendTo(fd);
-      await API.postForm('/api/listings', fd);
+      await withBusy(e.target, 'Posting…', async () => {
+        await listingPic.appendTo(fd);
+        await API.postForm('/api/listings', fd);
+      });
       e.target.reset();
       syncFood();
       toast('Posted.');

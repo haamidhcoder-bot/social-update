@@ -23,6 +23,7 @@
         <div class="field"><label for="adistrict">District *</label><select id="adistrict" required>${DISTRICTS.map(d => `<option>${d}</option>`).join('')}</select></div>
         <div class="field"><label for="aarea">Area / town *</label><input id="aarea" required maxlength="100"></div>
         <div class="field full"><label for="aaddress">Full address / landmark</label><input id="aaddress" maxlength="255"></div>
+        <div class="field full" id="profileMap"></div>
         <div class="field full"><label for="adetails">What do you offer or need?</label><textarea id="adetails" rows="3" placeholder="${esc(role.help)}"></textarea></div>
         <div class="field"><label for="acapacity">Capacity / quantity</label><input id="acapacity" maxlength="100"></div>
         <div class="field"><label for="awebsite">Website / social link</label><input id="awebsite" type="url" maxlength="255" placeholder="https://"></div>
@@ -38,6 +39,8 @@
   const profilePic = mountPicture(document.getElementById('profilePicture'),
     'Farm / organisation picture (optional)', me.user.photo_url);
 
+  const profileMap = mountMapPicker(document.getElementById('profileMap'));
+
   function fillAccount(a) {
     const set = (id, v) => { document.getElementById(id).value = v ?? ''; };
     set('aorg', a.org_name); set('acontact', a.contact_name); set('aphone', a.phone);
@@ -45,6 +48,7 @@
     set('aaddress', a.address); set('adetails', a.details);
     set('acapacity', a.capacity); set('awebsite', a.website);
     set('acurpw', ''); set('anewpw', '');
+    profileMap.setPin(a.latitude, a.longitude);
     profilePic.setCurrent(a.photo_url);
     document.getElementById('userName').textContent = a.org_name;
   }
@@ -57,6 +61,7 @@
     err.textContent = '';
     const v = id => document.getElementById(id).value;
     try {
+      const form = e.target;
       const fd = new FormData();
       fd.append('org', v('aorg')); fd.append('contact', v('acontact'));
       fd.append('phone', v('aphone')); fd.append('email', v('aemail'));
@@ -64,8 +69,11 @@
       fd.append('address', v('aaddress')); fd.append('details', v('adetails'));
       fd.append('capacity', v('acapacity')); fd.append('website', v('awebsite'));
       if (v('anewpw')) { fd.append('current_password', v('acurpw')); fd.append('new_password', v('anewpw')); }
-      profilePic.appendTo(fd);
-      const res = await API.postForm('/api/account', fd);
+      profileMap.appendTo(fd);
+      const res = await withBusy(form, 'Saving…', async () => {
+        await profilePic.appendTo(fd);
+        return API.postForm('/api/account', fd);
+      });
       fillAccount(res.account);
       toast('Account details saved.');
     } catch (ex) { err.textContent = ex.message; }

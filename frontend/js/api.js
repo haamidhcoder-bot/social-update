@@ -157,13 +157,39 @@ function startSafeTicker(onExpire) {
 }
 
 // ---------- tap to call / tap to open in maps ----------
+// Disables the form's submit button while `fn` runs (stops double posts and
+// shows the person that something is happening).
+async function withBusy(form, label, fn) {
+  const btn = form.querySelector('[type=submit]');
+  const old = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = label; }
+  try { return await fn(); }
+  finally { if (btn) { btn.disabled = false; btn.textContent = old; } }
+}
+
+// Phone photos are often 2 MB+; shrink them in the browser so uploads are fast.
+async function shrinkImage(file, maxSide = 1600, quality = 0.82) {
+  if (!file || !/^image\/(jpeg|png|webp)$/.test(file.type) || file.size < 300 * 1024) return file;
+  try {
+    const bmp = await createImageBitmap(file);
+    const scale = Math.min(1, maxSide / Math.max(bmp.width, bmp.height));
+    const c = document.createElement('canvas');
+    c.width = Math.round(bmp.width * scale); c.height = Math.round(bmp.height * scale);
+    c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+    const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', quality));
+    return blob && blob.size < file.size ? new File([blob], 'photo.jpg', { type: 'image/jpeg' }) : file;
+  } catch (e) { return file; }
+}
+
 const telHref = p => 'tel:' + String(p ?? '').replace(/[^\d+]/g, '');
 const mapsHref = q => 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(q);
 function phoneChip(phone) {
   return phone ? `<a class="chip" href="${telHref(phone)}" title="Call ${esc(phone)}">Call ${esc(phone)}</a>` : '';
 }
-function placeChip(label, query) {
-  return label ? `<a class="chip" href="${mapsHref(query || label)}" target="_blank" rel="noopener" title="Open in Google Maps">Open map</a>` : '';
+function placeChip(label, query, lat, lng) {
+  if (!label) return '';
+  const q = (lat != null && lat !== '' && lng != null && lng !== '') ? `${+lat},${+lng}` : (query || label);
+  return `<a class="chip" href="${mapsHref(q)}" target="_blank" rel="noopener" title="Open in Google Maps">Open map</a>`;
 }
 
 // ---------- picture picker (upload a file or paste a link, with preview) ----------
@@ -204,7 +230,7 @@ function mountPicture(host, label, current) {
   img.addEventListener('error', () => { prev.hidden = true; remWrap.hidden = !currentUrl; });
   file.addEventListener('change', () => {
     const f = file.files[0];
-    if (f && f.size > MAX_IMAGE_MB * 1024 * 1024) {
+    if (f && f.size > 15 * 1024 * 1024) {
       file.value = ''; toast('Picture is too large. Maximum size is ' + MAX_IMAGE_MB + ' MB.');
     } else if (f) { url.value = ''; rem.checked = false; }
     refresh();
@@ -219,8 +245,8 @@ function mountPicture(host, label, current) {
   refresh();
 
   return {
-    appendTo(fd) {
-      if (file.files[0]) fd.append('picture', file.files[0]);
+    async appendTo(fd) {
+      if (file.files[0]) fd.append('picture', await shrinkImage(file.files[0]));
       if (url.value.trim()) fd.append('picture_url', url.value.trim());
       if (rem.checked) fd.append('remove_picture', '1');
     },

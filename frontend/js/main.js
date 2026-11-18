@@ -63,9 +63,14 @@ document.getElementById('registerForm').addEventListener('submit', async e => {
   const err = document.getElementById('registerError');
   err.textContent = '';
   const fd = new FormData(e.target);          // includes the optional picture
+  fd.delete('picture'); fd.delete('picture_url'); fd.delete('remove_picture');
   const body = Object.fromEntries(fd);
   try {
-    const res = await API.postForm('/api/register', fd);
+    const res = await withBusy(e.target, 'Creating account…', async () => {
+      regMap.appendTo(fd);
+      await regPicture.appendTo(fd);
+      return API.postForm('/api/register', fd);
+    });
     location.href = res.redirect;          // straight to the role page
   } catch (ex) {
     err.textContent = ex.message;
@@ -82,15 +87,29 @@ document.getElementById('loginForm').addEventListener('submit', async e => {
   const err = document.getElementById('loginError');
   err.textContent = '';
   try {
-    const res = await API.post('/api/login', {
+    const res = await withBusy(e.target, 'Logging in…', () => API.post('/api/login', {
       email: document.getElementById('loginEmail').value,
       password: document.getElementById('loginPassword').value,
-    });
+    }));
     location.href = res.redirect;          // straight to the role page
   } catch (ex) { err.textContent = ex.message; }
 });
 
 // ---- directory ----
+const DIR_LIMIT = 6;
+let dirExpanded = false;
+function applyDirLimit() {
+  const cards = [...document.querySelectorAll('#directoryList .person')];
+  const btn = document.getElementById('seeAllBtn');
+  const over = cards.length > DIR_LIMIT;
+  cards.forEach((c, i) => { c.hidden = over && !dirExpanded && i >= DIR_LIMIT; });
+  btn.hidden = !over;
+  btn.textContent = dirExpanded ? 'Show fewer' : `See all ${cards.length} members`;
+}
+document.getElementById('seeAllBtn').addEventListener('click', () => {
+  dirExpanded = !dirExpanded; applyDirLimit();
+});
+
 async function renderDirectory() {
   const params = new URLSearchParams({
     q: document.getElementById('search').value,
@@ -104,8 +123,8 @@ async function renderDirectory() {
       const r = roleBySlug(m.role);
       const contact = m.phone
         ? `<br>${esc(m.contact_name)}<br><a href="mailto:${esc(m.email)}">${esc(m.email)}</a>
-           <span class="chips">${phoneChip(m.phone)}${placeChip(m.org_name + ', ' + m.area, [m.org_name, m.area, m.district, 'Tamil Nadu'].join(', '))}</span>`
-        : `<br>Log in to see contact details<span class="chips">${placeChip(m.area + ', ' + m.district, [m.area, m.district, 'Tamil Nadu'].join(', '))}</span>`;
+           <span class="chips">${phoneChip(m.phone)}${placeChip(m.org_name + ', ' + m.area, [m.org_name, m.area, m.district, 'Tamil Nadu'].join(', '), m.latitude, m.longitude)}</span>`
+        : `<br>Log in to see contact details<span class="chips">${placeChip(m.area + ', ' + m.district, [m.area, m.district, 'Tamil Nadu'].join(', '), m.latitude, m.longitude)}</span>`;
       return `<article class="person"><div class="person-top">
         <div class="person-icon">${m.photo_url ? pictureTag(m.photo_url, 'person-photo', m.org_name) : ''}<span>${esc((m.org_name || '?').trim().charAt(0).toUpperCase())}</span></div>
         <div><h3>${esc(m.org_name)}</h3><small>${esc(r.name)}</small></div></div>
@@ -113,6 +132,8 @@ async function renderDirectory() {
         ${m.details ? '<p>' + esc(m.details) + '</p>' : ''}
         <span class="tag">${esc(m.district)}</span></article>`;
     }).join('') : '<div class="empty">Nobody here yet. You could be the first.</div>';
+    dirExpanded = false;
+    applyDirLimit();
   } catch (ex) {
     box.innerHTML = `<div class="empty">${esc(ex.message)}</div>`;
   }
@@ -124,6 +145,7 @@ document.getElementById('search').addEventListener('input', () => {
 document.getElementById('filterRole').addEventListener('change', renderDirectory);
 document.getElementById('filterDistrict').addEventListener('change', renderDirectory);
 
+const regMap = mountMapPicker(document.getElementById('regMap'));
 const regPicture = mountPicture(document.getElementById('regPicture'), 'Farm / organisation picture (optional)');
 chooseRole('farmer', false);
 refreshAuthNav();
